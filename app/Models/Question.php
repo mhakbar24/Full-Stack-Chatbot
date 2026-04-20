@@ -14,7 +14,10 @@ class Question extends Model
         'option_b',
         'option_c',
         'option_d',
-        'correct_answer',];
+        'correct_answer',
+        'difficulty_level',
+        'competency_key',
+    ];
 
     public function options()
     {

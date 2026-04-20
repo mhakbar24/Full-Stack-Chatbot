@@ -2,90 +2,74 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Quiz;
 use App\Models\Question;
-use App\Models\Option;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use App\Models\Quiz;
 use App\Models\Teacher;
 use App\Services\GeminiService;
 use App\Services\PhaseFWebCompetencyService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
-
-class QuizController extends Controller
+class WebGuruQuizController extends Controller
 {
-    // 🔹 Buat quiz baru
+    public function index(Request $request)
+    {
+        $teacher = $this->resolveTeacher();
+        $competencyService = app(PhaseFWebCompetencyService::class);
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:255'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+
+        $search = trim((string) ($validated['q'] ?? ''));
+
+        $quizzes = Quiz::query()
+            ->where('teacher_id', $teacher->id)
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where('title', 'like', "%{$search}%");
+            })
+            ->when(!empty($validated['from']), function ($query) use ($validated) {
+                $query->whereDate('created_at', '>=', $validated['from']);
+            })
+            ->when(!empty($validated['to']), function ($query) use ($validated) {
+                $query->whereDate('created_at', '<=', $validated['to']);
+            })
+            ->withCount('questions')
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
+        return view('guru-quizzes', [
+            'quizzes' => $quizzes,
+            'filters' => $validated,
+            'competencyOptions' => $competencyService->competencyOptions(),
+            'user' => auth()->user(),
+        ]);
+    }
+
     public function store(Request $request)
     {
+        $teacher = $this->resolveTeacher();
+
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
         ]);
 
-        $quiz = Quiz::create([
+        Quiz::create([
+            'teacher_id' => $teacher->id,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
-            'teacher_id' => $request->user()->id, // guru yang login
         ]);
 
-        return response()->json($quiz, 201);
-    }
-
-
-    // 🔹 Lihat semua quiz (beserta soalnya)
-    public function index()
-    {
-        $quizzes = Quiz::with('questions')->get();
-
-        return response()->json($quizzes);
-    }
-
-    // 🔹 Detail 1 quiz
-    public function show($id)
-    {
-        $quiz = Quiz::with('questions')->findOrFail($id);
-
-        return response()->json($quiz);
-    }
-
-    public function update(Request $request, $id)
-    {
-    $quiz = Quiz::findOrFail($id);
-
-    $request->validate([
-        'title' => 'required|string|max:255',
-        'description' => 'nullable|string',
-    ]);
-
-    $quiz->update([
-        'title' => $request->title,
-        'description' => $request->description,
-    ]);
-
-    return response()->json([
-        'message' => 'Quiz updated successfully',
-        'data' => $quiz
-    ], 200);
-    }
-
-    public function destroy($id)
-    {
-        $quiz = Quiz::findOrFail($id);
-        $quiz->delete();
-
-        return response()->json(['message' => 'Quiz deleted successfully']);
+        return redirect()->route('guru.quizzes')->with('status', 'Quiz berhasil dibuat.');
     }
 
     public function generateAi(Request $request, GeminiService $gemini, PhaseFWebCompetencyService $competencyService)
     {
-        $teacher = $request->user();
-        if (!$teacher instanceof Teacher) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Akses ditolak (khusus guru).',
-            ], 403);
-        }
+        $teacher = $this->resolveTeacher();
 
         $validated = $request->validate([
             'topic' => ['required', 'string', 'max:255'],
@@ -119,7 +103,8 @@ class QuizController extends Controller
             . "      \"correct_answer\": \"A|B|C|D\"\n"
             . "    }\n"
             . "  ]\n"
-            . "}";
+            . "}\n"
+            . "Semua soal harus relevan dengan CP/ATP dan topik.";
 
         $raw = $gemini->generateText(
             $prompt,
@@ -128,10 +113,7 @@ class QuizController extends Controller
         );
 
         if (!$raw) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Generate quiz AI gagal. Periksa konfigurasi Gemini.',
-            ], 500);
+            return redirect()->route('guru.quizzes')->with('status', 'Generate quiz AI gagal. Periksa konfigurasi Gemini.');
         }
 
         $payload = $this->parseQuizJson($raw);
@@ -153,16 +135,7 @@ class QuizController extends Controller
         }
 
         if (!$this->isValidGeneratedQuizPayload($payload)) {
-            Log::warning('AI quiz payload invalid', [
-                'raw_preview' => mb_substr($raw, 0, 1200),
-                'has_payload' => (bool) $payload,
-                'has_title' => is_array($payload) ? !empty($payload['title']) : false,
-                'question_type' => is_array($payload) ? gettype($payload['questions'] ?? null) : null,
-            ]);
-            return response()->json([
-                'ok' => false,
-                'message' => 'Output AI tidak valid. Coba lagi dengan topik lebih spesifik.',
-            ], 422);
+            return redirect()->route('guru.quizzes')->with('status', 'Output AI tidak valid. Silakan coba lagi dengan topik lebih spesifik.');
         }
 
         $quiz = DB::transaction(function () use ($payload, $teacher) {
@@ -196,6 +169,8 @@ class QuizController extends Controller
                     'option_c' => mb_substr($c, 0, 255),
                     'option_d' => mb_substr($d, 0, 255),
                     'correct_answer' => $correct,
+                    'difficulty_level' => $this->normalizeDifficulty((string) ($item['difficulty_level'] ?? $difficulty)),
+                    'competency_key' => $this->normalizeCompetency((string) ($item['competency_key'] ?? ($selectedCompetency['key'] ?? ''))),
                 ]);
             }
 
@@ -203,23 +178,129 @@ class QuizController extends Controller
         });
 
         if ($quiz->questions()->count() === 0) {
-            Log::warning('AI quiz had zero valid questions after normalization', [
-                'quiz_title' => $payload['title'] ?? null,
-                'raw_preview' => mb_substr($raw, 0, 1200),
-                'normalized_question_preview' => $payload['questions'][0] ?? null,
-            ]);
             $quiz->delete();
-            return response()->json([
-                'ok' => false,
-                'message' => 'Soal hasil AI tidak memenuhi format minimal.',
-            ], 422);
+            return redirect()->route('guru.quizzes')->with('status', 'Soal hasil AI tidak memenuhi format minimal. Coba lagi.');
         }
 
-        return response()->json([
-            'ok' => true,
-            'message' => 'Quiz dan soal berhasil digenerate AI sesuai CP/ATP.',
-            'quiz' => Quiz::with('questions')->find($quiz->id),
-        ], 201);
+        return redirect()->route('guru.quizzes.show', $quiz->id)
+            ->with('status', 'Quiz dan soal berhasil digenerate AI sesuai acuan CP/ATP.');
+    }
+
+    public function show(int $id)
+    {
+        $teacher = $this->resolveTeacher();
+        $competencyService = app(PhaseFWebCompetencyService::class);
+
+        $quiz = Quiz::with('questions')
+            ->where('teacher_id', $teacher->id)
+            ->findOrFail($id);
+
+        return view('guru-quiz-detail', [
+            'quiz' => $quiz,
+            'competencyOptions' => $competencyService->competencyOptions(),
+            'user' => auth()->user(),
+        ]);
+    }
+
+    public function update(Request $request, int $id)
+    {
+        $teacher = $this->resolveTeacher();
+
+        $quiz = Quiz::where('teacher_id', $teacher->id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+        ]);
+
+        $quiz->update($validated);
+
+        return back()->with('status', 'Quiz berhasil diperbarui.');
+    }
+
+    public function destroy(int $id)
+    {
+        $teacher = $this->resolveTeacher();
+
+        $quiz = Quiz::where('teacher_id', $teacher->id)->findOrFail($id);
+        $quiz->delete();
+
+        return redirect()->route('guru.quizzes')->with('status', 'Quiz berhasil dihapus.');
+    }
+
+    public function storeQuestion(Request $request, int $quizId)
+    {
+        $teacher = $this->resolveTeacher();
+
+        $quiz = Quiz::where('teacher_id', $teacher->id)->findOrFail($quizId);
+
+        $validated = $request->validate([
+            'question_text' => ['required', 'string', 'max:255'],
+            'option_a' => ['required', 'string', 'max:255'],
+            'option_b' => ['required', 'string', 'max:255'],
+            'option_c' => ['required', 'string', 'max:255'],
+            'option_d' => ['required', 'string', 'max:255'],
+            'correct_answer' => ['required', 'in:A,B,C,D'],
+            'difficulty_level' => ['nullable', 'in:dasar,menengah,lanjut'],
+            'competency_key' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $validated['difficulty_level'] = $this->normalizeDifficulty((string) ($validated['difficulty_level'] ?? 'menengah'));
+        $validated['competency_key'] = $this->normalizeCompetency((string) ($validated['competency_key'] ?? ''));
+
+        $quiz->questions()->create($validated);
+
+        return back()->with('status', 'Soal berhasil ditambahkan.');
+    }
+
+    public function updateQuestion(Request $request, int $id)
+    {
+        $teacher = $this->resolveTeacher();
+
+        $question = Question::with('quiz')
+            ->whereHas('quiz', fn ($q) => $q->where('teacher_id', $teacher->id))
+            ->findOrFail($id);
+
+        $validated = $request->validate([
+            'question_text' => ['required', 'string', 'max:255'],
+            'option_a' => ['required', 'string', 'max:255'],
+            'option_b' => ['required', 'string', 'max:255'],
+            'option_c' => ['required', 'string', 'max:255'],
+            'option_d' => ['required', 'string', 'max:255'],
+            'correct_answer' => ['required', 'in:A,B,C,D'],
+            'difficulty_level' => ['nullable', 'in:dasar,menengah,lanjut'],
+            'competency_key' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $validated['difficulty_level'] = $this->normalizeDifficulty((string) ($validated['difficulty_level'] ?? 'menengah'));
+        $validated['competency_key'] = $this->normalizeCompetency((string) ($validated['competency_key'] ?? ''));
+
+        $question->update($validated);
+
+        return back()->with('status', 'Soal berhasil diperbarui.');
+    }
+
+    public function destroyQuestion(int $id)
+    {
+        $teacher = $this->resolveTeacher();
+
+        $question = Question::whereHas('quiz', fn ($q) => $q->where('teacher_id', $teacher->id))
+            ->findOrFail($id);
+
+        $question->delete();
+
+        return back()->with('status', 'Soal berhasil dihapus.');
+    }
+
+    private function resolveTeacher(): Teacher
+    {
+        $teacher = Teacher::where('email', auth()->user()->email)->first();
+
+        if (!$teacher) {
+            abort(403, 'Akun web belum terhubung ke data guru API.');
+        }
+
+        return $teacher;
     }
 
     private function parseQuizJson(string $raw): ?array
@@ -339,7 +420,30 @@ class QuizController extends Controller
             'option_c' => $optionC,
             'option_d' => $optionD,
             'correct_answer' => $correct,
+            'difficulty_level' => $this->normalizeDifficulty((string) ($item['difficulty_level'] ?? $item['difficulty'] ?? $item['level'] ?? 'menengah')),
+            'competency_key' => $this->normalizeCompetency((string) ($item['competency_key'] ?? $item['competency'] ?? $item['cp_atp_key'] ?? '')),
         ];
+    }
+
+    private function normalizeDifficulty(string $difficulty): string
+    {
+        $value = strtolower(trim($difficulty));
+
+        if (in_array($value, ['dasar', 'beginner', 'easy'], true)) {
+            return 'dasar';
+        }
+
+        if (in_array($value, ['lanjut', 'advanced', 'hard'], true)) {
+            return 'lanjut';
+        }
+
+        return 'menengah';
+    }
+
+    private function normalizeCompetency(string $key): ?string
+    {
+        $value = trim($key);
+        return $value === '' ? null : mb_substr($value, 0, 100);
     }
 
     private function isValidGeneratedQuizPayload(?array $payload): bool

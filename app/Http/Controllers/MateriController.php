@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Http\Resources\MateriResource;
 use Illuminate\Http\Request;
 use App\Models\Materi;
+use App\Models\Student;
+use App\Models\StudentMateriLog;
+use App\Models\Teacher;
 use Illuminate\Support\Facades\Storage;
 
 class MateriController extends Controller
@@ -20,12 +23,10 @@ class MateriController extends Controller
 
     public function myMateri(Request $request)
     {
-        /** @var \App\Models\Teacher $teacher */
         $teacher = $request->user();
 
-        // Jika user tidak terotentikasi, kembalikan respons error
-        if (!$teacher) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
+        if (!$teacher instanceof Teacher) {
+            return response()->json(['message' => 'Akses ditolak. Endpoint ini khusus guru.'], 403);
         }
 
         // Ambil materi milik teacher yang sedang login
@@ -46,7 +47,12 @@ class MateriController extends Controller
      */
     public function store(Request $request)
     {
-          $request->validate([
+        $teacher = $request->user();
+        if (!$teacher instanceof Teacher) {
+            return response()->json(['message' => 'Akses ditolak. Endpoint ini khusus guru.'], 403);
+        }
+
+        $request->validate([
         'title' => 'required|string|max:255',
         'category' => 'nullable|string',
         'description' => 'nullable|string',
@@ -62,7 +68,7 @@ class MateriController extends Controller
         'title' => $request->title,
         'category' => $request->category,
         'description' => $request->description,
-        'teacher_id' => $request->user()->id,
+        'teacher_id' => $teacher->id,
         'image' => $imagePath
         ]);
 
@@ -72,12 +78,48 @@ class MateriController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
         $materi = Materi::with('teacher:id,name,email')->findOrFail($id);
+
+        $user = $request->user();
+        if ($user instanceof Student) {
+            StudentMateriLog::create([
+                'student_id' => $user->id,
+                'materi_id' => $materi->id,
+                'accessed_at' => now(),
+            ]);
+        }
+
         return new MateriResource($materi);
     }
 
+    public function track(Request $request, string $id)
+    {
+        $student = $request->user();
+        if (!$student instanceof Student) {
+            return response()->json(['message' => 'Akses ditolak. Endpoint ini khusus siswa.'], 403);
+        }
+
+        $materi = Materi::findOrFail($id);
+
+        $log = StudentMateriLog::create([
+            'student_id' => $student->id,
+            'materi_id' => $materi->id,
+            'accessed_at' => now(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Aktivitas materi tercatat.',
+            'data' => [
+                'id' => $log->id,
+                'student_id' => $log->student_id,
+                'materi_id' => $log->materi_id,
+                'accessed_at' => $log->accessed_at,
+            ],
+        ]);
+    }
     /**
      * Show the form for editing the specified resource.
      */
@@ -91,8 +133,10 @@ class MateriController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        /** @var \App\Models\Teacher $teacher */
         $teacher = $request->user();
+        if (!$teacher instanceof Teacher) {
+            return response()->json(['message' => 'Akses ditolak. Endpoint ini khusus guru.'], 403);
+        }
 
         // Ambil materi milik guru yang login
         $materi = $teacher->materis()->findOrFail($id);
@@ -127,8 +171,10 @@ class MateriController extends Controller
      */
     public function destroy(Request $request, $id)
     {
-        /** @var \App\Models\Teacher $teacher */
         $teacher = $request->user();
+        if (!$teacher instanceof Teacher) {
+            return response()->json(['message' => 'Akses ditolak. Endpoint ini khusus guru.'], 403);
+        }
 
         $materi = $teacher->materis()->findOrFail($id);
 

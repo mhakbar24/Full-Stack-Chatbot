@@ -19,4 +19,9 @@ class Materi extends Model
     {
         return $this->belongsTo(Teacher::class);
     }
+
+    public function studentLogs()
+    {
+        return $this->hasMany(StudentMateriLog::class);
+    }
 }
