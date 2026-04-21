@@ -6,6 +6,52 @@ use Illuminate\Support\Collection;
 
 class PhaseFWebCompetencyService
 {
+    public function materiTopicOptions(): array
+    {
+        return [
+            [
+                'key' => 'html_semantic_layout',
+                'name' => 'HTML Semantik dan Struktur Layout',
+                'focus' => 'penyusunan kerangka halaman dengan elemen semantik yang tepat',
+            ],
+            [
+                'key' => 'css_responsive_design',
+                'name' => 'CSS Responsif dengan Flexbox/Grid',
+                'focus' => 'pembuatan layout responsif untuk desktop dan mobile',
+            ],
+            [
+                'key' => 'javascript_dom_events',
+                'name' => 'JavaScript DOM dan Event Handling',
+                'focus' => 'interaksi dinamis menggunakan event dan manipulasi elemen',
+            ],
+            [
+                'key' => 'form_validation_basic',
+                'name' => 'Form dan Validasi Input Dasar',
+                'focus' => 'validasi input sisi frontend dan backend sederhana',
+            ],
+            [
+                'key' => 'http_api_integration',
+                'name' => 'Integrasi HTTP API (JSON)',
+                'focus' => 'alur request-response, fetch/axios, dan penanganan error',
+            ],
+            [
+                'key' => 'backend_crud_laravel',
+                'name' => 'Backend CRUD Laravel',
+                'focus' => 'implementasi CRUD, validasi, dan relasi data dasar',
+            ],
+            [
+                'key' => 'auth_sanctum_basic',
+                'name' => 'Autentikasi Dasar dengan Sanctum',
+                'focus' => 'login, token, proteksi route, dan praktik keamanan dasar',
+            ],
+            [
+                'key' => 'debug_testing_web',
+                'name' => 'Debugging dan Testing Aplikasi Web',
+                'focus' => 'analisis error log, pengujian fungsional, dan perbaikan bertahap',
+            ],
+        ];
+    }
+
     /**
      * CP/ATP acuan ringkas untuk Pemrograman Website Fase F.
      */

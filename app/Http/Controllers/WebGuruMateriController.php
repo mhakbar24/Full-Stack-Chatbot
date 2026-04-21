@@ -8,6 +8,7 @@ use App\Services\GeminiService;
 use App\Services\PhaseFWebCompetencyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class WebGuruMateriController extends Controller
 {
@@ -47,6 +48,7 @@ class WebGuruMateriController extends Controller
             'materis' => $materis,
             'filters' => $validated,
             'competencyOptions' => $competencyService->competencyOptions(),
+            'topicOptions' => $competencyService->materiTopicOptions(),
             'user' => auth()->user(),
         ]);
     }
@@ -81,47 +83,69 @@ class WebGuruMateriController extends Controller
     public function generateAi(Request $request, GeminiService $gemini, PhaseFWebCompetencyService $competencyService)
     {
         $teacher = $this->resolveTeacher();
+        $topicOptions = $competencyService->materiTopicOptions();
+        $topicKeys = collect($topicOptions)->pluck('key')->all();
 
         $validated = $request->validate([
-            'topic' => ['required', 'string', 'max:255'],
+            'topic_key' => ['required', 'string', Rule::in($topicKeys)],
             'competency_key' => ['nullable', 'string', 'max:100'],
             'depth' => ['nullable', 'in:dasar,menengah,lanjut'],
         ]);
 
-        $topic = trim((string) $validated['topic']);
+        $selectedTopic = collect($topicOptions)->firstWhere('key', $validated['topic_key']);
+        $topic = (string) ($selectedTopic['name'] ?? 'Topik Umum Pemrograman Web');
+        $topicFocus = (string) ($selectedTopic['focus'] ?? 'konsep inti dan implementasi praktis');
         $depth = (string) ($validated['depth'] ?? 'menengah');
         $competencyKey = $validated['competency_key'] ?? null;
         $selectedCompetency = $competencyService->getCompetencyByKey($competencyKey);
         $catalogContext = $competencyService->renderCatalogContext($competencyKey);
 
         $prompt = "Buat materi pembelajaran pemrograman web fase F untuk guru dengan topik: {$topic}.\n"
+            . "Fokus topik: {$topicFocus}.\n"
             . "Kedalaman materi: {$depth}.\n"
+            . "Target pembaca: siswa SMK (fase F) yang masih belajar dari dasar.\n"
             . "Acuan CP/ATP:\n{$catalogContext}\n\n"
             . ($selectedCompetency ? "Kompetensi prioritas: {$selectedCompetency['name']}.\n" : '')
             . "Kembalikan HANYA JSON valid tanpa markdown dengan struktur:\n"
             . "{\n"
             . "  \"title\": \"...\",\n"
             . "  \"category\": \"...\",\n"
-            . "  \"description\": \"...\"\n"
+            . "  \"isi_materi\": \"...\"\n"
             . "}\n"
-            . "Isi description harus siap dipakai sebagai materi singkat yang jelas, runtut, dan aplikatif.";
+            . "Isi isi_materi HARUS berupa isi materi lengkap siap ajar, bukan deskripsi materi.\n"
+            . "Gunakan struktur bagian berikut di dalam isi_materi dengan paragraf nyata:\n"
+            . "1) Tujuan Pembelajaran\n"
+            . "2) Konsep Inti\n"
+            . "3) Langkah Praktik\n"
+            . "4) Contoh Kode\n"
+            . "5) Latihan Siswa\n"
+            . "6) Ringkasan\n"
+            . "Aturan gaya bahasa:\n"
+            . "- Gunakan bahasa Indonesia sederhana, kalimat pendek, dan hindari istilah teknis yang rumit.\n"
+            . "- Jika harus memakai istilah teknis, langsung beri penjelasan singkat dalam tanda kurung.\n"
+            . "- Beri contoh yang dekat dengan kehidupan siswa SMK (misal form login, katalog produk, halaman profil).\n"
+            . "- Pada Langkah Praktik, tulis langkah bernomor yang bisa langsung diikuti siswa.\n"
+            . "- Pada Contoh Kode, gunakan contoh minimal namun benar dan mudah dipahami.\n"
+            . "Panjang minimal 220 kata, bahasa Indonesia yang jelas, aplikatif, dan mudah diajarkan.";
 
         $raw = $gemini->generateText(
             $prompt,
-            'Kamu penyusun materi SMK fase F. Jawab JSON murni saja tanpa teks tambahan.',
+            'Kamu penyusun materi untuk siswa SMK fase F. Tulis materi yang mudah dipahami pemula, praktis, dan tidak bertele-tele. Jawab JSON murni saja tanpa teks tambahan.',
             true
         );
 
         $payload = $raw ? $this->parseMateriJson($raw) : null;
 
-        if (!$this->isValidGeneratedMateriPayload($payload)) {
-            $fallbackPrompt = "Topik materi: {$topic}. Balas HANYA JSON valid: "
-                . '{"title":"...","category":"...","description":"..."}'
-                . " dengan konten sesuai CP/ATP pemrograman web fase F level {$depth}.";
+        if (!$this->isValidGeneratedMateriPayload($payload) || !$this->isDetailedGeneratedMateri((string) ($payload['description'] ?? ''))) {
+            $fallbackPrompt = "Topik materi: {$topic} ({$topicFocus}). Balas HANYA JSON valid: "
+                . '{"title":"...","category":"...","isi_materi":"..."}'
+                . " dengan konten sesuai CP/ATP pemrograman web fase F level {$depth}. "
+                . "Isi_materi harus berisi materi lengkap siap ajar (Tujuan Pembelajaran, Konsep Inti, Langkah Praktik, Contoh Kode, Latihan Siswa, Ringkasan) minimal 220 kata."
+                . " Gunakan bahasa sederhana untuk siswa SMK pemula, langkah praktis bernomor, dan contoh kontekstual sehari-hari.";
 
             $rawFallback = $gemini->generateText(
                 $fallbackPrompt,
-                'JSON murni tanpa bullet dan tanpa markdown.',
+                'JSON murni tanpa markdown. Fokus pada materi yang mudah dipahami siswa SMK pemula.',
                 true
             );
 
@@ -130,9 +154,9 @@ class WebGuruMateriController extends Controller
             }
         }
 
-        if (!$this->isValidGeneratedMateriPayload($payload)) {
+        if (!$this->isValidGeneratedMateriPayload($payload) || !$this->isDetailedGeneratedMateri((string) ($payload['description'] ?? ''))) {
             return redirect()->route('guru.materis')
-                ->with('status', 'Generate materi AI gagal. Coba topik yang lebih spesifik.');
+            ->with('status', 'Generate materi AI gagal menghasilkan isi materi lengkap. Silakan coba lagi.');
         }
 
         Materi::create([
@@ -227,7 +251,7 @@ class WebGuruMateriController extends Controller
         return [
             'title' => (string) ($payload['title'] ?? $payload['judul'] ?? $payload['materi_title'] ?? ''),
             'category' => (string) ($payload['category'] ?? $payload['kategori'] ?? 'CP/ATP Fase F'),
-            'description' => (string) ($payload['description'] ?? $payload['deskripsi'] ?? $payload['content'] ?? ''),
+            'description' => (string) ($payload['isi_materi'] ?? $payload['description'] ?? $payload['deskripsi'] ?? $payload['content'] ?? ''),
         ];
     }
 
@@ -236,6 +260,37 @@ class WebGuruMateriController extends Controller
         return is_array($payload)
             && trim((string) ($payload['title'] ?? '')) !== ''
             && trim((string) ($payload['description'] ?? '')) !== '';
+    }
+
+    private function isDetailedGeneratedMateri(string $description): bool
+    {
+        $normalized = mb_strtolower(trim(strip_tags($description)), 'UTF-8');
+        if ($normalized === '') {
+            return false;
+        }
+
+        $wordCount = str_word_count($normalized);
+        if ($wordCount < 220) {
+            return false;
+        }
+
+        $requiredSectionHints = [
+            'tujuan pembelajaran',
+            'konsep inti',
+            'langkah praktik',
+            'contoh kode',
+            'latihan',
+            'ringkasan',
+        ];
+
+        $hit = 0;
+        foreach ($requiredSectionHints as $hint) {
+            if (str_contains($normalized, $hint)) {
+                $hit++;
+            }
+        }
+
+        return $hit >= 4;
     }
 
     private function buildMateriRubric(string $description): array

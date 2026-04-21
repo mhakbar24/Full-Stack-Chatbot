@@ -86,7 +86,7 @@
             @csrf
             <input name="title" placeholder="Judul materi" required>
             <input name="category" placeholder="Kategori (opsional)">
-            <textarea name="description" rows="3" placeholder="Deskripsi"></textarea>
+            <textarea name="description" rows="3" placeholder="Isi materi"></textarea>
             <input type="file" name="image" accept="image/*">
             <div><button type="submit">Simpan Materi</button></div>
         </form>
@@ -98,7 +98,12 @@
             @csrf
             <div>
                 <label>Topik Materi</label>
-                <input name="topic" placeholder="Contoh: HTML semantik dan struktur layout" required>
+                <select name="topic_key" required style="width:100%;padding:10px;border:1px solid #c4dccf;border-radius:10px;font:inherit;">
+                    <option value="">Pilih topik materi</option>
+                    @foreach (($topicOptions ?? []) as $topic)
+                        <option value="{{ $topic['key'] }}" @selected(old('topic_key') === $topic['key'])>{{ $topic['name'] }}</option>
+                    @endforeach
+                </select>
             </div>
             <div>
                 <label>Kompetensi CP/ATP</label>
@@ -127,7 +132,7 @@
         <h3>Daftar Materi Saya</h3>
         <table>
             <thead>
-                <tr><th>Gambar</th><th>Judul</th><th>Kategori</th><th>Deskripsi</th><th>Aksi</th></tr>
+                <tr><th>Gambar</th><th>Judul</th><th>Kategori</th><th>Isi Materi</th><th>Aksi</th></tr>
             </thead>
             <tbody>
             @forelse ($materis as $materi)

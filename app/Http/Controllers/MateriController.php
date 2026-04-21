@@ -56,7 +56,7 @@ class MateriController extends Controller
         'title' => 'required|string|max:255',
         'category' => 'nullable|string',
         'description' => 'nullable|string',
-        'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+        'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048'
         ]);
 
     $imagePath = null;
@@ -146,7 +146,7 @@ class MateriController extends Controller
             'title' => 'sometimes|string|max:255',
             'category' => 'sometimes|string',
             'description' => 'sometimes|string',
-            'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:2048'
+            'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048'
         ]);
 
         // Update gambar jika ada file baru
