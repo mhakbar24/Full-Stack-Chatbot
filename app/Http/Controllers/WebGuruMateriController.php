@@ -47,7 +47,6 @@ class WebGuruMateriController extends Controller
             'materis' => $materis,
             'filters' => $validated,
             'competencyOptions' => $competencyService->competencyOptions(),
-            'topicOptions' => $competencyService->materiTopicOptions(),
             'user' => auth()->user(),
         ]);
     }

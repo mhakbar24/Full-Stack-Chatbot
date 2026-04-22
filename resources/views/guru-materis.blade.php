@@ -101,12 +101,7 @@
             @csrf
             <div>
                 <label>Topik Materi</label>
-                <select name="topic_key" required style="width:100%;padding:10px;border:1px solid #c4dccf;border-radius:10px;font:inherit;">
-                    <option value="">Pilih topik materi</option>
-                    @foreach (($topicOptions ?? []) as $topic)
-                        <option value="{{ $topic['key'] }}" @selected(old('topic_key') === $topic['key'])>{{ $topic['name'] }}</option>
-                    @endforeach
-                </select>
+                <input name="topic" value="{{ old('topic') }}" placeholder="Contoh: HTML semantik dan struktur layout" required>
             </div>
             <div>
                 <label>Kompetensi CP/ATP</label>
