@@ -330,6 +330,7 @@ Response 200:
       "category": "Frontend",
       "isi_materi": "Materi lengkap...",
       "description": "Materi lengkap...",
+      "icon": "https://fansnime.my.id/storage/materi_icons/icon-html.png",
       "image": "https://fansnime.my.id/storage/materi_images/a.jpg",
       "teacher": {
         "id": 2,
@@ -353,6 +354,7 @@ Response 200:
     "category": "Frontend",
     "isi_materi": "Materi lengkap...",
     "description": "Materi lengkap...",
+    "icon": "https://fansnime.my.id/storage/materi_icons/icon-html.png",
     "image": "https://fansnime.my.id/storage/materi_images/a.jpg",
     "teacher": {
       "id": 2,
@@ -627,5 +629,95 @@ Response 404:
 {
   "ok": false,
   "message": "Histori feedback AI tidak ditemukan."
+}
+```
+
+## 9. Endpoint Icon Materi (Untuk Guru/Admin Backend)
+
+Catatan penting:
+- Upload icon menggunakan endpoint materi yang sama.
+- Field khusus icon bernama `icon`.
+- Wajib `multipart/form-data`.
+- Validasi icon: `jpg/jpeg/png/gif/webp`, maksimal 1MB.
+
+### 9.1 Upload icon saat create materi
+- Method: POST
+- Path: `/materi`
+- Auth: Bearer token guru
+- Body form-data:
+  - `title` (required)
+  - `category` (optional)
+  - `description` (optional)
+  - `icon` (optional file)
+  - `image` (optional file)
+
+Contoh cURL:
+```bash
+curl -X POST "https://fansnime.my.id/api/materi" \
+  -H "Authorization: Bearer {token_guru}" \
+  -H "Accept: application/json" \
+  -F "title=HTML Dasar" \
+  -F "category=Frontend" \
+  -F "description=Isi materi HTML" \
+  -F "icon=@/path/icon-html.png" \
+  -F "image=@/path/cover-html.jpg"
+```
+
+Response 201 (contoh):
+```json
+{
+  "data": {
+    "id": 31,
+    "title": "HTML Dasar",
+    "category": "Frontend",
+    "isi_materi": "Isi materi HTML",
+    "description": "Isi materi HTML",
+    "icon": "https://fansnime.my.id/storage/materi_icons/abc123.png",
+    "image": "https://fansnime.my.id/storage/materi_images/xyz999.jpg",
+    "created_at": "2026-04-22 18:10:00"
+  }
+}
+```
+
+### 9.2 Update/replace icon materi
+- Method: PUT
+- Path: `/materi/{id}`
+- Auth: Bearer token guru
+- Body form-data (kirim field yang ingin diubah):
+  - `icon` (file baru)
+
+Contoh cURL:
+```bash
+curl -X POST "https://fansnime.my.id/api/materi/31" \
+  -H "Authorization: Bearer {token_guru}" \
+  -H "Accept: application/json" \
+  -F "_method=PUT" \
+  -F "icon=@/path/icon-html-baru.png"
+```
+
+Response 200 (contoh):
+```json
+{
+  "data": {
+    "id": 31,
+    "title": "HTML Dasar",
+    "icon": "https://fansnime.my.id/storage/materi_icons/icon-baru-777.png",
+    "image": "https://fansnime.my.id/storage/materi_images/xyz999.jpg"
+  }
+}
+```
+
+### 9.3 Konsumsi icon di Android siswa
+- Endpoint: `GET /materi` atau `GET /materi/{id}`
+- Field URL icon yang dipakai di aplikasi: `data[].icon` atau `data.icon`
+
+Contoh parsing sederhana di Android:
+```json
+{
+  "data": {
+    "id": 31,
+    "title": "HTML Dasar",
+    "icon": "https://fansnime.my.id/storage/materi_icons/icon-baru-777.png"
+  }
 }
 ```

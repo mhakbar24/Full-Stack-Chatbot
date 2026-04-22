@@ -8,7 +8,6 @@ use App\Services\GeminiService;
 use App\Services\PhaseFWebCompetencyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
 
 class WebGuruMateriController extends Controller
 {
@@ -90,18 +89,15 @@ class WebGuruMateriController extends Controller
     public function generateAi(Request $request, GeminiService $gemini, PhaseFWebCompetencyService $competencyService)
     {
         $teacher = $this->resolveTeacher();
-        $topicOptions = $competencyService->materiTopicOptions();
-        $topicKeys = collect($topicOptions)->pluck('key')->all();
 
         $validated = $request->validate([
-            'topic_key' => ['required', 'string', Rule::in($topicKeys)],
+            'topic' => ['required', 'string', 'max:255'],
             'competency_key' => ['nullable', 'string', 'max:100'],
             'depth' => ['nullable', 'in:dasar,menengah,lanjut'],
         ]);
 
-        $selectedTopic = collect($topicOptions)->firstWhere('key', $validated['topic_key']);
-        $topic = (string) ($selectedTopic['name'] ?? 'Topik Umum Pemrograman Web');
-        $topicFocus = (string) ($selectedTopic['focus'] ?? 'konsep inti dan implementasi praktis');
+        $topic = trim((string) $validated['topic']);
+        $topicFocus = 'konsep inti dan implementasi praktis';
         $depth = (string) ($validated['depth'] ?? 'menengah');
         $competencyKey = $validated['competency_key'] ?? null;
         $selectedCompetency = $competencyService->getCompetencyByKey($competencyKey);
