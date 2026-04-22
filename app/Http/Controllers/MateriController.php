@@ -56,7 +56,8 @@ class MateriController extends Controller
         'title' => 'required|string|max:255',
         'category' => 'nullable|string',
         'description' => 'nullable|string',
-        'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048'
+        'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+        'icon' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:1024'
         ]);
 
     $imagePath = null;
@@ -64,12 +65,18 @@ class MateriController extends Controller
         $imagePath = $request->file('image')->store('materi_images', 'public');
         }
 
+    $iconPath = null;
+    if ($request->hasFile('icon')) {
+        $iconPath = $request->file('icon')->store('materi_icons', 'public');
+        }
+
     $materi = Materi::create([
         'title' => $request->title,
         'category' => $request->category,
         'description' => $request->description,
         'teacher_id' => $teacher->id,
-        'image' => $imagePath
+        'image' => $imagePath,
+        'icon' => $iconPath
         ]);
 
     return (new MateriResource($materi))->response()->setStatusCode(201);
@@ -146,7 +153,8 @@ class MateriController extends Controller
             'title' => 'sometimes|string|max:255',
             'category' => 'sometimes|string',
             'description' => 'sometimes|string',
-            'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048'
+            'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'icon' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:1024'
         ]);
 
         // Update gambar jika ada file baru
@@ -157,6 +165,14 @@ class MateriController extends Controller
             }
             // Simpan gambar baru dan update path
             $validatedData['image'] = $request->file('image')->store('materi_images', 'public');
+        }
+
+        if ($request->hasFile('icon')) {
+            if ($materi->icon) {
+                Storage::disk('public')->delete($materi->icon);
+            }
+
+            $validatedData['icon'] = $request->file('icon')->store('materi_icons', 'public');
         }
 
         // Update data materi dengan data yang sudah divalidasi
@@ -177,6 +193,13 @@ class MateriController extends Controller
         }
 
         $materi = $teacher->materis()->findOrFail($id);
+
+        if ($materi->image) {
+            Storage::disk('public')->delete($materi->image);
+        }
+        if ($materi->icon) {
+            Storage::disk('public')->delete($materi->icon);
+        }
 
         $materi->delete();
 

@@ -20,6 +20,7 @@ class MateriResource extends JsonResource
             'category'    => $this->category,
             'isi_materi'  => $this->description,
             'description' => $this->description,
+            'icon'        => $this->icon ? url('storage/' . $this->icon) : null,
             'image'       => $this->image ? url('storage/' . $this->image) : null,
             'teacher'     => new TeacherResource($this->whenLoaded('teacher')),
             'created_at'  => $this->created_at->format('Y-m-d H:i:s'),

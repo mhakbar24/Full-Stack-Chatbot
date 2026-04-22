@@ -62,11 +62,17 @@ class WebGuruMateriController extends Controller
             'category' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'icon' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
         ]);
 
         $imagePath = null;
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('materi_images', 'public');
+        }
+
+        $iconPath = null;
+        if ($request->hasFile('icon')) {
+            $iconPath = $request->file('icon')->store('materi_icons', 'public');
         }
 
         Materi::create([
@@ -75,6 +81,7 @@ class WebGuruMateriController extends Controller
             'category' => $validated['category'] ?? null,
             'description' => $validated['description'] ?? null,
             'image' => $imagePath,
+            'icon' => $iconPath,
         ]);
 
         return redirect()->route('guru.materis')->with('status', 'Materi berhasil dibuat.');
@@ -165,6 +172,7 @@ class WebGuruMateriController extends Controller
             'category' => mb_substr((string) ($payload['category'] ?? 'CP/ATP Fase F'), 0, 255),
             'description' => (string) $payload['description'],
             'image' => null,
+            'icon' => null,
         ]);
 
         $rubric = $this->buildMateriRubric((string) $payload['description']);
@@ -184,6 +192,7 @@ class WebGuruMateriController extends Controller
             'category' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'icon' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
         ]);
 
         if ($request->hasFile('image')) {
@@ -191,6 +200,13 @@ class WebGuruMateriController extends Controller
                 Storage::disk('public')->delete($materi->image);
             }
             $validated['image'] = $request->file('image')->store('materi_images', 'public');
+        }
+
+        if ($request->hasFile('icon')) {
+            if ($materi->icon) {
+                Storage::disk('public')->delete($materi->icon);
+            }
+            $validated['icon'] = $request->file('icon')->store('materi_icons', 'public');
         }
 
         $materi->update($validated);
@@ -205,6 +221,9 @@ class WebGuruMateriController extends Controller
 
         if ($materi->image) {
             Storage::disk('public')->delete($materi->image);
+        }
+        if ($materi->icon) {
+            Storage::disk('public')->delete($materi->icon);
         }
 
         $materi->delete();

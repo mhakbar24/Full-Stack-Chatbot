@@ -87,6 +87,9 @@
             <input name="title" placeholder="Judul materi" required>
             <input name="category" placeholder="Kategori (opsional)">
             <textarea name="description" rows="3" placeholder="Isi materi"></textarea>
+            <label>Icon materi (opsional)</label>
+            <input type="file" name="icon" accept="image/*">
+            <label>Gambar materi (opsional)</label>
             <input type="file" name="image" accept="image/*">
             <div><button type="submit">Simpan Materi</button></div>
         </form>
@@ -132,11 +135,20 @@
         <h3>Daftar Materi Saya</h3>
         <table>
             <thead>
-                <tr><th>Gambar</th><th>Judul</th><th>Kategori</th><th>Isi Materi</th><th>Aksi</th></tr>
+                <tr><th>Icon</th><th>Gambar</th><th>Judul</th><th>Kategori</th><th>Isi Materi</th><th>Aksi</th></tr>
             </thead>
             <tbody>
             @forelse ($materis as $materi)
                 <tr>
+                    <td>
+                        @if ($materi->icon)
+                            <button type="button" class="thumb-btn" data-preview-src="{{ asset('storage/' . $materi->icon) }}" data-preview-alt="Icon {{ $materi->title }}">
+                                <img class="thumb" src="{{ asset('storage/' . $materi->icon) }}" alt="Icon {{ $materi->title }}">
+                            </button>
+                        @else
+                            -
+                        @endif
+                    </td>
                     <td>
                         @if ($materi->image)
                             <button type="button" class="thumb-btn" data-preview-src="{{ asset('storage/' . $materi->image) }}" data-preview-alt="{{ $materi->title }}">
@@ -155,6 +167,9 @@
                             <input name="title" value="{{ $materi->title }}" required>
                             <input name="category" value="{{ $materi->category }}">
                             <textarea name="description" rows="2">{{ $materi->description }}</textarea>
+                            <label>Icon materi</label>
+                            <input type="file" name="icon" accept="image/*">
+                            <label>Gambar materi</label>
                             <input type="file" name="image" accept="image/*">
                             <div class="actions">
                                 <button type="submit" style="background:#2d4f78;">Update</button>
@@ -167,7 +182,7 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="5">Belum ada materi.</td></tr>
+                <tr><td colspan="6">Belum ada materi.</td></tr>
             @endforelse
             </tbody>
         </table>

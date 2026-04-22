@@ -102,4 +102,7 @@ sudo systemctl status nginx
 sudo systemctl status php8.2-fpm
 sudo supervisorctl status
 ls -la storage/logs
+ls -la public | grep storage
+ls -la public/storage
+stat -c "%U:%G %a %n" storage bootstrap/cache
 ```

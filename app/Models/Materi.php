@@ -12,6 +12,7 @@ class Materi extends Model
     'category',
     'description',
     'image',
+    'icon',
     'teacher_id'
 ];
 

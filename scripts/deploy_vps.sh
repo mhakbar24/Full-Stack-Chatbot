@@ -35,21 +35,24 @@ else
   echo "No package.json found, skipping frontend build"
 fi
 
-echo "[5/10] Ensure storage symlink"
-$PHP_BIN artisan storage:link || true
+echo "[5/10] Fix runtime permissions"
+chown -R www-data:www-data "$APP_DIR/storage" "$APP_DIR/bootstrap/cache" "$APP_DIR/public"
+chmod -R ug+rwx "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
 
-echo "[6/10] Run database migration"
+echo "[6/10] Ensure storage symlink"
+$PHP_BIN artisan storage:link || true
+if [ ! -L "$APP_DIR/public/storage" ]; then
+  ln -sfn "$APP_DIR/storage/app/public" "$APP_DIR/public/storage"
+fi
+
+echo "[7/10] Run database migration"
 $PHP_BIN artisan migrate --force
 
-echo "[7/10] Optimize caches"
+echo "[8/10] Optimize caches"
 $PHP_BIN artisan optimize:clear
 $PHP_BIN artisan config:cache
 $PHP_BIN artisan route:cache
 $PHP_BIN artisan view:cache
-
-echo "[8/10] Fix permissions"
-chown -R www-data:www-data "$APP_DIR"
-chmod -R ug+rwx "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
 
 echo "[9/10] Restart services"
 systemctl restart "$PHP_FPM_SERVICE"
